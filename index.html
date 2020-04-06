@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Out!</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            padding-top: 100px;
+            text-align: center;
+        }
+
+        .row {
+            font-size: 0;
+            margin: 7px;
+        }
+
+        .square {
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+            background-color: darkgray;
+            /* border: 1px solid black; */
+            display: inline-block;
+            margin: 0 3.5px;
+            border-radius: 5px;
+        }
+
+        .square.selected {
+            background-color: darkturquoise;
+        }
+    </style>
+</head>
+<body>
+    <div class="container"></div>
+    <script>
+        (() => {
+            const $ = document.querySelector.bind(document);
+
+            // Helper function for creating elements with HTML Strings
+            function createEl(html) {
+                const $div = document.createElement('div');
+                $div.innerHTML = html.trim();
+                return $div.firstChild;
+            }
+
+            // Helper function for attaching private variables to Class methods
+            function attachedPrivate(private) {
+                const obj = Object.create(this);
+                
+                Object.keys(private).forEach((p) => {
+                    obj[p] = private[p];
+                });
+
+                return obj;
+            };
+
+            // Helper function to wrap Class instance functions
+            const callWrapper = function(fn, private) {
+                return (...args) => {
+                    return fn.apply(attachedPrivate.call(this, private), args);
+                };
+            }
+
+            function Game(size) {
+                const squares = [];
+
+                const createSquares = () => {
+                    for (let i = 0; i < size; ++i) {
+                        const $row = createEl(`<div class="row"></div>`);
+                        $('.container').appendChild($row);
+
+                        squares.push([]);
+                        for (let j = 0; j < size; ++j) {
+                            squares[i].push(
+                                // create new Square object
+                                new Square($row, (i * size) + j, (i + j === 0))
+                            );
+                        }
+                    }
+                };
+
+                // Setup instance methods that wrap prototypes
+                this.init = callWrapper.call(this, Game.prototype.init, { squares });
+                this.getNeighborSquares = callWrapper.call(this, Game.prototype.getNeighborSquares, { squares });
+                this.checkIfOver = callWrapper.call(this, Game.prototype.checkIfOver, { squares });
+                this.destroy = callWrapper.call(this, Game.prototype.destroy, { squares });
+                
+                let gameOverCb;
+                this.gameOver = function(fn) {
+                    if (fn)
+                        return gameOverCb = fn;
+                    if (gameOverCb)
+                        gameOverCb();
+                };
+
+                createSquares();
+            }
+
+            Game.prototype.init = function() {
+                const eachRow = (squares, row) => {
+                    squares.forEach((square, col) => {
+                        eachSquare(square, row, col)
+                    });
+                };
+
+                const eachSquare = (square, row, col) => {
+                    square.onClick((e) => {
+                        if (square.isSelected()) {
+                            const neighbors = this.getNeighborSquares(row, col);
+                            neighbors.forEach(eachNeighbor);
+                            square.toggle();
+                            this.checkIfOver();
+                        }
+                    });
+                };
+
+                const eachNeighbor = (square) => square.toggle();
+
+                // loop through squares to setup click listener
+                this.squares.forEach(eachRow);
+            };
+
+            Game.prototype.destroy = function() {
+                this.squares.forEach((row) => {
+                    row.forEach((square) => {
+                        square.destroy();
+                    });
+                });
+            };
+
+            Game.prototype.getNeighborSquares = function(row, col) {
+                let up = this.squares[row - 1];
+                up = up && up[col];
+
+                let down = this.squares[row + 1];
+                down = down && down[col];
+                
+                let left = this.squares[row][col - 1];
+                let right = this.squares[row][col + 1];
+
+                const arr = [ up, down, left, right ];
+
+                return arr.filter((e) => typeof e !== 'undefined');
+            };
+
+            Game.prototype.checkIfOver = function() {
+                const over = !this.squares.find((row) => (
+                    row.find(s => s.isSelected())
+                ));
+
+                if (over)
+                    this.gameOver();
+            };
+
+            function Square($parent, key, selected) {
+                const html = `
+                <div class="square square-${key} ${(selected) ? 'selected' : ''}"></div>
+                `;
+
+                const $el = createEl(html);
+                
+                // Setup instance methods that wrap prototypes
+                this.toggle = callWrapper.call(this, Square.prototype.toggle, { $el });
+                this.onClick = callWrapper.call(this, Square.prototype.onClick, { $el });
+                this.isSelected = callWrapper.call(this, Square.prototype.isSelected, { $el });
+                this.destroy = callWrapper.call(this, Square.prototype.destroy, { $el });
+
+                $parent.appendChild($el);
+            }
+
+            Square.prototype.toggle = function() {
+                this.$el.classList.toggle('selected');
+            };
+
+            Square.prototype.onClick = function(fn) {
+                this.$el.addEventListener('click', (e) => fn(e));
+            };
+
+            Square.prototype.isSelected = function() {
+                return this.$el.classList.contains('selected');
+            };
+
+            Square.prototype.destroy = function() {
+                return this.$el.parentNode.removeChild(this.$el);
+            };
+
+            window.onload = () => {
+                let game;
+
+                const whenGameOver = () => {
+                    const input = window.prompt('You won! Play again with different size? 0 to stop playing');
+                    const size = Number.parseInt(input);
+
+                    if (size !== 0 && !Number.isNaN(size)) {
+                        game.destroy();
+                        newGame(size);
+                    }
+                };
+                
+                const newGame = (size) => {
+                    game = new Game(size);
+                    game.init();
+                    game.gameOver(whenGameOver);
+                };
+
+                newGame(2);
+            };
+        })();
+    </script>
+</body>
+</html>
